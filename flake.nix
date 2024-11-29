@@ -35,12 +35,16 @@
         }
       );
     in {
-      devShells.default = pkgs.mkShell {
+      devShells.default = with pkgs; mkShell {
         nativeBuildInputs = [
-          pkgs.elf2uf2-rs
-          pkgs.flip-link
-          pkgs.gcc-arm-embedded
+          elf2uf2-rs
+          flip-link
+          gcc-arm-embedded
+          pkg-config
           rust-toolchain
+        ];
+        buildInputs = [
+          udev
         ];
       };
     }
