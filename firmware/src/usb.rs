@@ -26,7 +26,7 @@ impl<'a> Usb<'a> {
         bus: &'a UsbBusAllocator<UsbBus>,
         serial_number: &'a str,
     ) -> Result<Self, crate::error::Infallible> {
-        let serial = SerialPort::new_with_interface_names(bus, None, Some("ἐννεάς-log"));
+        let serial = SerialPort::new_with_interface_names(bus, Some("ἐννεάς-log"), None);
         let commands = CommandPort::new(bus);
 
         let device = UsbDeviceBuilder::new(bus, UsbVidPid(0xf055, 0xcf82))
@@ -138,7 +138,7 @@ struct CommandPort<'a> {
 impl<'a> CommandPort<'a> {
     pub fn new(bus: &'a UsbBusAllocator<UsbBus>) -> Self {
         Self {
-            class: CdcAcmClass::new_with_interface_names(bus, 64, None, Some("ἐννεάς-commands")),
+            class: CdcAcmClass::new_with_interface_names(bus, 64, Some("ἐννεάς-commands"), None),
         }
     }
 

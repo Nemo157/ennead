@@ -5,9 +5,10 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-anyhow.version = "1.0.93"
 anyhow.default-features = false
 anyhow.features = ["std"]
+anyhow.version = "1.0.93"
+nix = { version = "0.29.0", default-features = false }
 
 udev.default-features = false
 udev.version = "0.9.1"
