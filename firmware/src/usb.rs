@@ -7,7 +7,7 @@ use usb_device::{
     device::{StringDescriptors, UsbDevice, UsbDeviceBuilder, UsbVidPid},
     UsbError,
 };
-use usbd_serial::{SerialPort, CdcAcmClass};
+use usbd_serial::{CdcAcmClass, SerialPort};
 
 use waveshare_rp2040_epaper_73::{
     hal::{usb::UsbBus, Timer},
@@ -22,7 +22,10 @@ pub struct Usb<'a> {
 }
 
 impl<'a> Usb<'a> {
-    pub fn new(bus: &'a UsbBusAllocator<UsbBus>) -> Result<Self, crate::error::Infallible> {
+    pub fn new(
+        bus: &'a UsbBusAllocator<UsbBus>,
+        serial_number: &'a str,
+    ) -> Result<Self, crate::error::Infallible> {
         let serial = SerialPort::new_with_interface_names(bus, None, Some("ἐννεάς-log"));
         let commands = CommandPort::new(bus);
 
@@ -30,7 +33,7 @@ impl<'a> Usb<'a> {
             .strings(&[StringDescriptors::default()
                 .manufacturer("Nullus157")
                 .product("ἐννεάς")
-                .serial_number("๑๒๓๔๕๖๗๘")])
+                .serial_number(serial_number)])
             .unwrap()
             .device_class(0) // generic device with multi-class interfaces ??
             .build();
@@ -73,7 +76,10 @@ impl<'a> Usb<'a> {
         }
 
         let mut next = false;
-        if self.device.poll(&mut [&mut self.serial, &mut self.commands.class]) {
+        if self
+            .device
+            .poll(&mut [&mut self.serial, &mut self.commands.class])
+        {
             let mut buf = [0u8; 64];
             match self.serial.read(&mut buf) {
                 Err(_e) => {
@@ -112,8 +118,7 @@ impl<'a> Usb<'a> {
                     let _ = writeln!(&mut text, "Received command error: {err:?}");
                     let _ = self.serial.write(text.as_bytes());
                 }
-                Ok(None) => {
-                }
+                Ok(None) => {}
                 Ok(Some(command)) => {
                     let mut text: String<64> = String::new();
                     let _ = writeln!(&mut text, "Received command: {}", command[0]);
@@ -143,7 +148,7 @@ impl<'a> CommandPort<'a> {
             Ok(63) => Ok(Some(packet)),
             Err(UsbError::WouldBlock) => Ok(None),
             Ok(_) => Err(UsbError::ParseError),
-            Err(err) => Err(err)
+            Err(err) => Err(err),
         }
     }
 }
