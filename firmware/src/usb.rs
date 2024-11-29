@@ -5,8 +5,9 @@ use panic_halt as _;
 use usb_device::{
     bus::UsbBusAllocator,
     device::{StringDescriptors, UsbDevice, UsbDeviceBuilder, UsbVidPid},
+    UsbError,
 };
-use usbd_serial::SerialPort;
+use usbd_serial::{SerialPort, CdcAcmClass};
 
 use waveshare_rp2040_epaper_73::{
     hal::{usb::UsbBus, Timer},
@@ -16,25 +17,28 @@ use waveshare_rp2040_epaper_73::{
 pub struct Usb<'a> {
     said_hello: bool,
     serial: SerialPort<'a, UsbBus>,
+    commands: CommandPort<'a>,
     device: UsbDevice<'a, UsbBus>,
 }
 
 impl<'a> Usb<'a> {
     pub fn new(bus: &'a UsbBusAllocator<UsbBus>) -> Result<Self, crate::error::Infallible> {
-        let serial = SerialPort::new(bus);
+        let serial = SerialPort::new_with_interface_names(bus, None, Some("ἐννεάς-log"));
+        let commands = CommandPort::new(bus);
 
-        let device = UsbDeviceBuilder::new(bus, UsbVidPid(0x16c0, 0x27dd))
+        let device = UsbDeviceBuilder::new(bus, UsbVidPid(0xf055, 0xcf82))
             .strings(&[StringDescriptors::default()
-                .manufacturer("Fake company")
-                .product("Serial port")
-                .serial_number("TEST")])
+                .manufacturer("Nullus157")
+                .product("ἐννεάς")
+                .serial_number("๑๒๓๔๕๖๗๘")])
             .unwrap()
-            .device_class(2) // from: https://www.usb.org/defined-class-codes
+            .device_class(0) // generic device with multi-class interfaces ??
             .build();
 
         Ok(Self {
             said_hello: false,
             serial,
+            commands,
             device,
         })
     }
@@ -69,7 +73,7 @@ impl<'a> Usb<'a> {
         }
 
         let mut next = false;
-        if self.device.poll(&mut [&mut self.serial]) {
+        if self.device.poll(&mut [&mut self.serial, &mut self.commands.class]) {
             let mut buf = [0u8; 64];
             match self.serial.read(&mut buf) {
                 Err(_e) => {
@@ -101,8 +105,45 @@ impl<'a> Usb<'a> {
                     activity.set_low()?;
                 }
             }
+
+            match self.commands.read() {
+                Err(err) => {
+                    let mut text: String<64> = String::new();
+                    let _ = writeln!(&mut text, "Received command error: {err:?}");
+                    let _ = self.serial.write(text.as_bytes());
+                }
+                Ok(None) => {
+                }
+                Ok(Some(command)) => {
+                    let mut text: String<64> = String::new();
+                    let _ = writeln!(&mut text, "Received command: {}", command[0]);
+                    let _ = self.serial.write(text.as_bytes());
+                }
+            }
         }
 
         Ok(next)
+    }
+}
+
+struct CommandPort<'a> {
+    class: CdcAcmClass<'a, UsbBus>,
+}
+
+impl<'a> CommandPort<'a> {
+    pub fn new(bus: &'a UsbBusAllocator<UsbBus>) -> Self {
+        Self {
+            class: CdcAcmClass::new_with_interface_names(bus, 64, None, Some("ἐννεάς-commands")),
+        }
+    }
+
+    pub fn read(&mut self) -> Result<Option<[u8; 63]>, UsbError> {
+        let mut packet = [0; 63];
+        match self.class.read_packet(&mut packet) {
+            Ok(63) => Ok(Some(packet)),
+            Err(UsbError::WouldBlock) => Ok(None),
+            Ok(_) => Err(UsbError::ParseError),
+            Err(err) => Err(err)
+        }
     }
 }
