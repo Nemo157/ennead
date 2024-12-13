@@ -7,8 +7,7 @@ pub const PALETTE: [OctColor; 7] = [OctColor::White, OctColor::Black, OctColor::
 
 impl Chunk {
     pub fn oct_pixels(&self) -> impl Iterator<Item = Pixel<OctColor>> {
-        let (x, y) = ((u16::from(self.counter) % 5) * 160, u16::from(self.counter) / 5);
-        self.pixels().map(OctColor::from).zip(x..).map(move |(color, x)| Pixel(Point::new(i32::from(x), i32::from(y)), color))
+        self.pixels().map(|((x, y), color)| Pixel(Point::new(i32::from(x), i32::from(y)), OctColor::from(color)))
     }
 }
 

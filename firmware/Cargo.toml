@@ -17,6 +17,12 @@ embedded-hal-bus.default-features = false
 embedded-hal.version = "1.0.0"
 embedded-hal.default-features = false
 
+# renamed to workaround https://github.com/rust-lang/rust/issues/134250
+ennead-protocol.package = "ἐννεάς-protocol"
+ennead-protocol.version = "0.1.0"
+ennead-protocol.path = "../protocol"
+ennead-protocol.features = ["embedded"]
+
 epd-waveshare.version = "0.6.0"
 epd-waveshare.default-features = false
 epd-waveshare.features = ["graphics", "linux-dev", "epd2in13_v3"]
@@ -46,6 +52,10 @@ waveshare-rp2040-epaper-73.git = "https://github.com/Nemo157/rp-hal-boards"
 waveshare-rp2040-epaper-73.branch = "waveshare-epaper-73"
 waveshare-rp2040-epaper-73.default-features = false
 waveshare-rp2040-epaper-73.features = ["boot2", "rt", "critical-section-impl", "rom-func-cache"]
+
+zerocopy.version = "0.8.11"
+zerocopy.default-features = false
+zerocopy.features = ["derive"]
 
 # Not actually used since we use `embedded_hal_bus::ExclusiveDevice`, but
 # necessary to get it to compile for now.

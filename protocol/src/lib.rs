@@ -1,7 +1,7 @@
 #![no_std]
 #![feature(iter_array_chunks, array_try_map)]
 
-use zerocopy::{IntoBytes, TryFromBytes, byteorder::little_endian as le};
+use zerocopy::{IntoBytes, TryFromBytes, byteorder::little_endian as le, KnownLayout, Immutable};
 
 #[cfg(feature = "std")]
 pub mod std;
@@ -9,31 +9,56 @@ pub mod std;
 #[cfg(feature = "embedded")]
 pub mod embedded;
 
+#[cfg(feature = "std")]
+pub use std::PALETTE;
+
 pub const WIDTH: u32 = 800;
 pub const HEIGHT: u32 = 480;
 
-#[derive(IntoBytes, TryFromBytes, Copy, Clone)]
+#[derive(IntoBytes, TryFromBytes, KnownLayout, Immutable, Copy, Clone, Debug)]
 #[repr(C)]
 pub struct SubChunk {
     data: [u8; 3],
 }
 
-#[derive(IntoBytes, TryFromBytes, Copy, Clone)]
+#[derive(IntoBytes, TryFromBytes, KnownLayout, Immutable, Copy, Clone)]
 #[repr(C)]
 pub struct Chunk {
     counter: le::U16,
     subchunks: [SubChunk; 20],
 }
 
-#[derive(IntoBytes, TryFromBytes, Copy, Clone)]
+impl core::fmt::Debug for Chunk {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let alternate = f.alternate();
+        let mut debug = f.debug_struct("Chunk");
+        debug.field("counter", &u16::from(self.counter));
+        if alternate {
+            debug.field("subchunks", &self.subchunks);
+        }
+        debug.finish()
+    }
+}
+
+#[derive(IntoBytes, TryFromBytes, KnownLayout, Immutable, Copy, Clone, strum::AsRefStr)]
 #[repr(u8)]
 pub enum Command {
     Start { _unused: [u8; 62] } = 0,
-    End { _unused: [u8; 62] } = 1,
-    Chunk(Chunk) = 2,
+    Chunk(Chunk) = 1,
+    End { _unused: [u8; 62] } = 2,
 }
 
-#[derive(Copy, Clone)]
+impl core::fmt::Debug for Command {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Self::Start { .. }=> f.debug_tuple("Command::Start").finish(),
+            Self::Chunk(chunk) => f.debug_tuple("Command::Chunk").field(chunk).finish(),
+            Self::End { .. }=> f.debug_tuple("Command::End").finish(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum Color {
     White,
     Black,
@@ -61,9 +86,10 @@ impl Chunk {
 }
 
 impl Chunk {
-    pub fn pixels(self) -> impl Iterator<Item = Color> {
+    pub fn pixels(self) -> impl Iterator<Item = ((u16, u16), Color)> {
+        let (x, y) = ((u16::from(self.counter) % 5) * 160, u16::from(self.counter) / 5);
         // TODO: how to handle error here
-        self.subchunks.into_iter().flat_map(|subchunk| <[Color; 8]>::try_from(subchunk).unwrap())
+        self.subchunks.into_iter().flat_map(|subchunk| <[Color; 8]>::try_from(subchunk).unwrap()).zip(x..).map(move |(color, x)| ((x, y), color))
     }
 }
 

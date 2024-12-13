@@ -1,11 +1,14 @@
 #![no_std]
 #![no_main]
 
+extern crate ennead_protocol as ἐννεάς_protocol;
+
 use embedded_hal::digital::OutputPin;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::String;
 use panic_halt as _;
 use usb_device::bus::UsbBusAllocator;
+use ἐννεάς_protocol::Command;
 
 use fugit::RateExtU32;
 use waveshare_rp2040_epaper_73::{
@@ -138,10 +141,12 @@ fn main() -> ! {
     led_power.set_high().unwrap();
 
     loop {
-        let next = usb.poll(&mut timer, &mut led_activity).unwrap();
+        let Some(command) = usb.poll(&mut timer, &mut led_activity).unwrap() else { continue };
 
-        if next {
-            display.next(&mut timer, &mut led_activity).unwrap();
+        match command {
+            Command::Start { .. } => display.clear(),
+            Command::Chunk(chunk) => display.update(chunk),
+            Command::End { .. } => display.show(&mut timer, &mut led_activity).unwrap(),
         }
     }
 }

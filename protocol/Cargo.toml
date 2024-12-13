@@ -9,24 +9,23 @@ embedded-graphics-core.version = "0.4.0"
 embedded-graphics-core.default-features = false
 embedded-graphics-core.optional = true
 
-embedded-image.default-features = false
-embedded-image.optional = true
-embedded-image.version = "0.0.0"
-
+epd-waveshare.version = "0.6.0"
 epd-waveshare.default-features = false
 epd-waveshare.features = ["graphics", "linux-dev", "epd2in13_v3"]
 epd-waveshare.optional = true
 
-epd-waveshare.version = "0.6.0"
+image.version = "0.25.5"
 image.default-features = false
 image.optional = true
 
-image.version = "0.25.5"
+strum.version = "0.26.3"
+strum.default-features = false
+strum.features = ["derive"]
+
+zerocopy.version = "0.8.11"
 zerocopy.default-features = false
 zerocopy.features = ["derive"]
 
-zerocopy.version = "0.8.11"
-
 [features]
 std = ["dep:image"]
-embedded = ["dep:embedded-image", "dep:epd-waveshare", "dep:embedded-graphics-core"]
+embedded = ["dep:epd-waveshare", "dep:embedded-graphics-core"]

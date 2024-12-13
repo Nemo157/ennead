@@ -5,10 +5,29 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+anyhow.version = "1.0.93"
 anyhow.default-features = false
 anyhow.features = ["std"]
-anyhow.version = "1.0.93"
-nix = { version = "0.29.0", default-features = false }
 
-udev.default-features = false
+dither.git = "https://github.com/Nemo157/dither"
+dither.default-features = false
+
+# renamed to workaround https://github.com/rust-lang/rust/issues/134250
+ennead-protocol.package = "ἐννεάς-protocol"
+ennead-protocol.path = "../protocol"
+ennead-protocol.version = "0.1.0"
+ennead-protocol.features = ["std"]
+
+image.version = "0.25.5"
+image.default-features = false
+image.features = ["png", "jpeg"]
+
+nix.version = "0.29.0"
+nix.default-features = false
+
 udev.version = "0.9.1"
+udev.default-features = false
+
+zerocopy.version = "0.8.11"
+zerocopy.default-features = false
+zerocopy.features = ["derive"]

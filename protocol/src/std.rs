@@ -2,8 +2,8 @@ use image::{GenericImageView, Rgb};
 
 use super::{Command, Chunk, Color, WIDTH, HEIGHT};
 
-const WHITE: Rgb<u8> = image::Rgb([0, 0, 0]);
-const BLACK: Rgb<u8> = image::Rgb([255, 255, 255]);
+const WHITE: Rgb<u8> = image::Rgb([255, 255, 255]);
+const BLACK: Rgb<u8> = image::Rgb([0, 0, 0]);
 const GREEN: Rgb<u8> = image::Rgb([0, 255, 0]);
 const BLUE: Rgb<u8> = image::Rgb([0, 0, 255]);
 const RED: Rgb<u8> = image::Rgb([255, 0, 0]);
@@ -31,6 +31,20 @@ impl Command {
                     }),
             )
             .chain([Self::End { _unused: [0; 62] }])
+    }
+}
+
+impl From<Color> for Rgb<u8> {
+    fn from(color: Color) -> Self {
+        match color {
+            Color::White => WHITE,
+            Color::Black => BLACK,
+            Color::Green => GREEN,
+            Color::Blue => BLUE,
+            Color::Red => RED,
+            Color::Yellow => YELLOW,
+            Color::Orange => ORANGE,
+        }
     }
 }
 

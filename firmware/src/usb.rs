@@ -8,6 +8,8 @@ use usb_device::{
     UsbError,
 };
 use usbd_serial::{CdcAcmClass, SerialPort};
+use ἐννεάς_protocol::Command;
+use zerocopy::TryFromBytes;
 
 use waveshare_rp2040_epaper_73::{
     hal::{usb::UsbBus, Timer},
@@ -19,6 +21,7 @@ pub struct Usb<'a> {
     serial: SerialPort<'a, UsbBus>,
     commands: CommandPort<'a>,
     device: UsbDevice<'a, UsbBus>,
+    received_chunks: usize,
 }
 
 impl<'a> Usb<'a> {
@@ -43,6 +46,7 @@ impl<'a> Usb<'a> {
             serial,
             commands,
             device,
+            received_chunks: 0,
         })
     }
 
@@ -50,7 +54,7 @@ impl<'a> Usb<'a> {
         &mut self,
         timer: &mut Timer,
         activity: &mut LedActivity,
-    ) -> Result<bool, crate::error::Infallible> {
+    ) -> Result<Option<Command>, crate::error::Infallible> {
         // A welcome message at the beginning
         if !self.said_hello && timer.get_counter().ticks() >= 2_000_000 {
             activity.set_high()?;
@@ -75,7 +79,6 @@ impl<'a> Usb<'a> {
             activity.set_low()?;
         }
 
-        let mut next = false;
         if self
             .device
             .poll(&mut [&mut self.serial, &mut self.commands.class])
@@ -93,9 +96,6 @@ impl<'a> Usb<'a> {
                     // Convert to upper case
                     buf.iter_mut().take(count).for_each(|b| {
                         b.make_ascii_uppercase();
-                        if *b == b'\t' {
-                            next = true;
-                        }
                     });
                     // Send back to the host
                     let mut wr_ptr = &buf[..count];
@@ -112,22 +112,30 @@ impl<'a> Usb<'a> {
                 }
             }
 
-            match self.commands.read() {
-                Err(err) => {
-                    let mut text: String<64> = String::new();
-                    let _ = writeln!(&mut text, "Received command error: {err:?}");
-                    let _ = self.serial.write(text.as_bytes());
-                }
-                Ok(None) => {}
-                Ok(Some(command)) => {
-                    let mut text: String<64> = String::new();
-                    let _ = writeln!(&mut text, "Received command: {}", command[0]);
-                    let _ = self.serial.write(text.as_bytes());
+            if let Ok(Some(command)) = self.commands.read() {
+                if let Ok(command) = Command::try_read_from_bytes(&command) {
+                    match command {
+                        Command::Start { .. } => {
+                            let mut text: String<64> = String::new();
+                            let _ = writeln!(&mut text, "Start");
+                            let _ = self.serial.write(text.as_bytes());
+                            self.received_chunks = 0;
+                        }
+                        Command::Chunk { .. } => {
+                            self.received_chunks += 1;
+                        }
+                        Command::End { .. } => {
+                            let mut text: String<64> = String::new();
+                            let _ = writeln!(&mut text, "End, received {} chunks", self.received_chunks);
+                            let _ = self.serial.write(text.as_bytes());
+                        }
+                    }
+                    return Ok(Some(command));
                 }
             }
         }
 
-        Ok(next)
+        Ok(None)
     }
 }
 
