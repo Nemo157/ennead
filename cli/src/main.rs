@@ -1,76 +1,65 @@
 extern crate ennead_protocol as ἐννεάς_protocol;
 
-use std::{
-    fs::OpenOptions,
-    os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd},
-    path::Path,
-};
-
 use anyhow::Context;
 use dither::Dither as _;
 use image::{imageops::FilterType, ImageReader};
 use indicatif::{ProgressBar, ProgressStyle};
-use zerocopy::{IntoBytes, TryFromBytes};
-use ἐννεάς_protocol::{image::PALETTE, Command, Response, HEIGHT, WIDTH};
+use nusb::DeviceInfo;
+use zerocopy::IntoBytes;
+use ἐννεάς_protocol::{image::PALETTE, Command, HEIGHT, WIDTH};
 
-fn find_device() -> anyhow::Result<OwnedFd> {
-    let mut enumerator = udev::Enumerator::new()?;
-
-    enumerator.match_subsystem("usb")?;
-    enumerator.match_attribute("interface", "ἐννεάς-commands")?;
-
-    for device in enumerator.scan_devices()? {
-        let tty = device
-            .syspath()
-            .join("tty")
-            .read_dir()?
-            .next()
-            .context("missing tty dir entry")??
-            .file_name();
-        let tty = Path::new("/dev").join(tty);
-
-        eprintln!(
-            "found device {}, command channel at {}",
-            device.syspath().display(),
-            tty.display()
-        );
-
-        return Ok(OpenOptions::new().read(true).write(true).open(tty)?.into());
+fn find_device() -> anyhow::Result<(DeviceInfo, u8)> {
+    let mut interface_number = None;
+    for device in nusb::list_devices()? {
+        for interface in device.interfaces() {
+            if interface.interface_string() == Some("ἐννεάς-commands") {
+                interface_number = Some(interface.interface_number());
+            }
+        }
+        if let Some(interface_number) = interface_number {
+            return Ok((device, interface_number));
+        }
     }
 
     anyhow::bail!("device not found")
 }
 
-fn send(device: BorrowedFd, command: &Command) -> anyhow::Result<()> {
-    let bytes = command.as_bytes();
-    let mut offset = 0;
-    while offset < bytes.len() {
-        offset += nix::unistd::write(&device, &bytes[offset..])?;
-    }
-    Ok(())
-}
-
-fn receive(device: RawFd) -> nix::Result<anyhow::Result<Response>> {
-    let mut bytes = [0; 63];
-    let mut offset = 0;
-    while offset < bytes.len() {
-        offset += nix::unistd::read(device.as_raw_fd(), &mut bytes[offset..])?;
-    }
-    Ok(Response::try_read_from_bytes(&bytes)
-        .map_err(|e| anyhow::Error::from(e.map_src(|s| Vec::from(s)))))
-}
-
 fn main() -> anyhow::Result<()> {
-    let device = find_device()?;
-
     let image = std::env::args()
         .skip(1)
         .next()
         .context("missing image filename")?;
 
-    eprintln!("loading and preparing {image}");
+    let spinner = ProgressStyle::with_template("{prefix:>40.cyan} {spinner} {msg}")?;
+    let success = ProgressStyle::with_template("{prefix:>40.green} {spinner} {msg}")?;
+    let bar_style = ProgressStyle::with_template(
+        "{prefix:>40.cyan} {spinner} [{bar:27}] {pos:>9}/{len:9}  {per_sec} {elapsed:>4}/{eta:4}",
+    )?;
 
-    let image = ImageReader::open(image)?.with_guessed_format()?.decode()?;
+    let bar = ProgressBar::no_length()
+        .with_style(spinner.clone())
+        .with_prefix("finding ἐννεάς device");
+    let (device, interface_number) = find_device()?;
+    let interface = device
+        .open()
+        .context("opening usb device")?
+        .detach_and_claim_interface(interface_number)
+        .context("claiming usb interface")?;
+    bar.with_style(success.clone())
+        .with_prefix("found device")
+        .finish_with_message(format!(
+            "{}/{} {}",
+            device.manufacturer_string().unwrap_or("<unknown>"),
+            device.product_string().unwrap_or("<unknown>"),
+            device.serial_number().unwrap_or("<unknown>")
+        ));
+
+    let bar = ProgressBar::no_length()
+        .with_style(spinner.clone())
+        .with_prefix("loading image")
+        .with_message(image.clone());
+
+    let image = ImageReader::open(&image)?.with_guessed_format()?.decode()?;
     image.save("/tmp/ἐννεάς.original.png").unwrap();
 
     let image = image.resize(WIDTH, HEIGHT, FilterType::CatmullRom);
@@ -113,33 +102,27 @@ fn main() -> anyhow::Result<()> {
     };
     let commands = Command::from_image(&image);
 
-    let mut errors = 0;
-    let bar = ProgressBar::new(u64::try_from(commands.len()).unwrap()).with_style(
-        ProgressStyle::with_template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
-        )
-        .unwrap(),
-    );
-    bar.set_message("sending image");
+    bar.with_style(success.clone())
+        .with_prefix("loaded image")
+        .finish();
+
+    let bar = ProgressBar::new(u64::try_from(commands.len())?)
+        .with_style(bar_style.clone())
+        .with_prefix("sending commands");
+
+    let mut output = interface.bulk_out_queue(0x02);
     for command in &commands {
-        loop {
-            send(device.as_fd(), command)?;
-            match receive(device.as_raw_fd())? {
-                Ok(Response::Ok { .. }) => break,
-                Ok(Response::Err { msg: _ }) => {
-                    errors += 1;
-                    bar.set_message(format!("sending image, {errors} errors"));
-                }
-                Err(err) => {
-                    eprintln!("invalid response {err}");
-                    errors += 1;
-                    bar.set_message(format!("sending image, {errors} errors"));
-                }
-            }
-        }
+        output.submit(Vec::from(command.as_bytes()));
+    }
+
+    while output.pending() > 0 {
+        futures::executor::block_on(output.next_complete()).into_result()?;
         bar.inc(1);
     }
-    bar.finish_with_message(format!("completed sending image with {errors} errors"));
+
+    bar.with_style(success.clone())
+        .with_prefix("sent commands")
+        .finish_with_message("image should be refreshing now");
 
     Ok(())
 }

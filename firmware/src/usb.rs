@@ -51,7 +51,20 @@ impl<'a> Usb<'a> {
     }
 
     pub fn send_response(&mut self, response: Response) {
-        let _ = self.commands.write(response.as_bytes().try_into().unwrap());
+        let mut text: String<62> = String::new();
+        let _ = writeln!(&mut text, "sending response: {}", response.as_bytes().len());
+        let _ = self.serial.write(text.as_bytes());
+
+        match self.commands.write(response.as_bytes()) {
+            Ok(()) => {
+                let _ = self.serial.write(b"sent response\n");
+            }
+            Err(err) => {
+                let mut text: String<62> = String::new();
+                let _ = writeln!(&mut text, "error sending response: {err:?}");
+                let _ = self.serial.write(text.as_bytes());
+            }
+        }
     }
 
     pub fn poll(
@@ -178,7 +191,7 @@ impl<'a> CommandPort<'a> {
         }
     }
 
-    pub fn write(&mut self, packet: &[u8; 63]) -> Result<(), UsbError> {
+    pub fn write(&mut self, packet: &[u8]) -> Result<(), UsbError> {
         match self.class.write_packet(packet) {
             Ok(63) => Ok(()),
             Ok(_) => Err(UsbError::WouldBlock),

@@ -152,10 +152,10 @@ fn main() -> ! {
                     Command::Chunk(chunk) => display.update(chunk),
                     Command::End { .. } => display.show(&mut timer, &mut led_activity).unwrap(),
                 }
-                usb.send_response(Response::Ok { _unused: [0; 62] });
+                // usb.send_response(Response::Ok { _unused: [0; 62] });
             }
             Err(msg) => {
-                usb.send_response(Response::Err { msg });
+                // usb.send_response(Response::Err { msg });
             }
         }
     }
