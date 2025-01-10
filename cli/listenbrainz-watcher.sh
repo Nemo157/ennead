@@ -76,6 +76,11 @@ do
     if read -st 1
     then
       printf '\r'
+      for (( ; i > 0; i-- ))
+      do
+        printf ' '
+      done
+      printf '\r'
       break
     fi
     printf '\b \b'
