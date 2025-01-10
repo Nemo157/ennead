@@ -1,16 +1,16 @@
 #![no_std]
 #![feature(iter_array_chunks, array_try_map)]
 
-use zerocopy::{IntoBytes, TryFromBytes, byteorder::little_endian as le, KnownLayout, Immutable};
+#[cfg(feature = "std")]
+extern crate std;
+
+use zerocopy::{byteorder::little_endian as le, Immutable, IntoBytes, KnownLayout, TryFromBytes};
 
 #[cfg(feature = "std")]
-pub mod std;
+pub mod image;
 
 #[cfg(feature = "embedded")]
 pub mod embedded;
-
-#[cfg(feature = "std")]
-pub use std::PALETTE;
 
 pub const WIDTH: u32 = 800;
 pub const HEIGHT: u32 = 480;
@@ -51,9 +51,43 @@ pub enum Command {
 impl core::fmt::Debug for Command {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Self::Start { .. }=> f.debug_tuple("Command::Start").finish(),
+            Self::Start { .. } => f.debug_tuple("Command::Start").finish(),
             Self::Chunk(chunk) => f.debug_tuple("Command::Chunk").field(chunk).finish(),
-            Self::End { .. }=> f.debug_tuple("Command::End").finish(),
+            Self::End { .. } => f.debug_tuple("Command::End").finish(),
+        }
+    }
+}
+
+#[derive(IntoBytes, TryFromBytes, KnownLayout, Immutable, Copy, Clone)]
+#[repr(transparent)]
+pub struct SmolStr<const CAP: usize>([u8; CAP]);
+
+impl<const CAP: usize> SmolStr<CAP> {
+    pub fn new(s: &str) -> Result<Self, ()> {
+        if s.as_bytes().contains(&0) {
+            return Err(());
+        }
+        Ok(Self(s.as_bytes().try_into().map_err(|_| ())?))
+    }
+
+    pub fn to_str(&self) -> Result<&str, ()> {
+        let end = self.0.iter().position(|&b| b == 0).unwrap_or(CAP);
+        core::str::from_utf8(&self.0[..end]).map_err(|_| ())
+    }
+}
+
+#[derive(IntoBytes, TryFromBytes, KnownLayout, Immutable, Copy, Clone, strum::AsRefStr)]
+#[repr(u8)]
+pub enum Response {
+    Ok { _unused: [u8; 62] } = 0,
+    Err { msg: SmolStr<62> } = 2,
+}
+
+impl core::fmt::Debug for Response {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Self::Ok { .. } => f.debug_tuple("Response::Ok").finish(),
+            Self::Err { msg } => f.debug_tuple("Response::Err").field(&msg.to_str()).finish(),
         }
     }
 }
@@ -87,9 +121,16 @@ impl Chunk {
 
 impl Chunk {
     pub fn pixels(self) -> impl Iterator<Item = ((u16, u16), Color)> {
-        let (x, y) = ((u16::from(self.counter) % 5) * 160, u16::from(self.counter) / 5);
+        let (x, y) = (
+            (u16::from(self.counter) % 5) * 160,
+            u16::from(self.counter) / 5,
+        );
         // TODO: how to handle error here
-        self.subchunks.into_iter().flat_map(|subchunk| <[Color; 8]>::try_from(subchunk).unwrap()).zip(x..).map(move |(color, x)| ((x, y), color))
+        self.subchunks
+            .into_iter()
+            .flat_map(|subchunk| <[Color; 8]>::try_from(subchunk).unwrap())
+            .zip(x..)
+            .map(move |(color, x)| ((x, y), color))
     }
 }
 
@@ -102,7 +143,7 @@ impl From<[Color; 8]> for SubChunk {
                 (a << 5) | (b << 2) | (c >> 1),
                 (c << 7) | (d << 4) | (e << 1) | (f >> 2),
                 (f << 6) | (g << 3) | h,
-            ]
+            ],
         }
     }
 }

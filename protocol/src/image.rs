@@ -1,6 +1,8 @@
+use std::vec::Vec;
+
 use image::{GenericImageView, Rgb};
 
-use super::{Command, Chunk, Color, WIDTH, HEIGHT};
+use super::{Chunk, Color, Command, HEIGHT, WIDTH};
 
 const WHITE: Rgb<u8> = image::Rgb([255, 255, 255]);
 const BLACK: Rgb<u8> = image::Rgb([0, 0, 0]);
@@ -13,9 +15,7 @@ const ORANGE: Rgb<u8> = image::Rgb([255, 128, 0]);
 pub const PALETTE: [image::Rgb<u8>; 7] = [WHITE, BLACK, GREEN, BLUE, RED, YELLOW, ORANGE];
 
 impl Command {
-    pub fn from_image(
-        image: &impl GenericImageView<Pixel = Rgb<u8>>,
-    ) -> impl Iterator<Item = Self> {
+    pub fn from_image(image: &impl GenericImageView<Pixel = Rgb<u8>>) -> Vec<Self> {
         assert!(image.dimensions() == (WIDTH, HEIGHT));
 
         [Self::Start { _unused: [0; 62] }]
@@ -27,10 +27,15 @@ impl Command {
                     .array_chunks()
                     .zip(0..)
                     .map(|(pixels, counter)| {
-                        Self::Chunk(Chunk::new(counter, pixels.map(|pixel| Color::try_from(pixel).expect("non-palettized image"))))
+                        Self::Chunk(Chunk::new(
+                            counter,
+                            pixels
+                                .map(|pixel| Color::try_from(pixel).expect("non-palettized image")),
+                        ))
                     }),
             )
             .chain([Self::End { _unused: [0; 62] }])
+            .collect()
     }
 }
 

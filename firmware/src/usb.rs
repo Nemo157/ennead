@@ -8,8 +8,8 @@ use usb_device::{
     UsbError,
 };
 use usbd_serial::{CdcAcmClass, SerialPort};
-use ἐννεάς_protocol::Command;
-use zerocopy::TryFromBytes;
+use zerocopy::{IntoBytes, TryFromBytes};
+use ἐννεάς_protocol::{Command, Response, SmolStr};
 
 use waveshare_rp2040_epaper_73::{
     hal::{usb::UsbBus, Timer},
@@ -50,11 +50,15 @@ impl<'a> Usb<'a> {
         })
     }
 
+    pub fn send_response(&mut self, response: Response) {
+        let _ = self.commands.write(response.as_bytes().try_into().unwrap());
+    }
+
     pub fn poll(
         &mut self,
         timer: &mut Timer,
         activity: &mut LedActivity,
-    ) -> Result<Option<Command>, crate::error::Infallible> {
+    ) -> Result<Option<Result<Command, SmolStr<62>>>, crate::error::Infallible> {
         // A welcome message at the beginning
         if !self.said_hello && timer.get_counter().ticks() >= 2_000_000 {
             activity.set_high()?;
@@ -113,24 +117,38 @@ impl<'a> Usb<'a> {
             }
 
             if let Ok(Some(command)) = self.commands.read() {
-                if let Ok(command) = Command::try_read_from_bytes(&command) {
-                    match command {
-                        Command::Start { .. } => {
-                            let mut text: String<64> = String::new();
-                            let _ = writeln!(&mut text, "Start");
-                            let _ = self.serial.write(text.as_bytes());
-                            self.received_chunks = 0;
+                let command = Command::try_read_from_bytes(&command);
+                match command {
+                    Ok(command) => {
+                        match command {
+                            Command::Start { .. } => {
+                                let mut text: String<64> = String::new();
+                                let _ = writeln!(&mut text, "Start");
+                                let _ = self.serial.write(text.as_bytes());
+                                self.received_chunks = 0;
+                            }
+                            Command::Chunk { .. } => {
+                                self.received_chunks += 1;
+                            }
+                            Command::End { .. } => {
+                                let mut text: String<64> = String::new();
+                                let _ = writeln!(
+                                    &mut text,
+                                    "End, received {} chunks",
+                                    self.received_chunks
+                                );
+                                let _ = self.serial.write(text.as_bytes());
+                            }
                         }
-                        Command::Chunk { .. } => {
-                            self.received_chunks += 1;
-                        }
-                        Command::End { .. } => {
-                            let mut text: String<64> = String::new();
-                            let _ = writeln!(&mut text, "End, received {} chunks", self.received_chunks);
-                            let _ = self.serial.write(text.as_bytes());
-                        }
+                        return Ok(Some(Ok(command)));
                     }
-                    return Ok(Some(command));
+                    Err(err) => {
+                        let mut text: String<62> = String::new();
+                        let _ = writeln!(&mut text, "{err}");
+                        return Ok(Some(Err(
+                            SmolStr::new(&text).unwrap_or_else(|_| SmolStr::new("error").unwrap())
+                        )));
+                    }
                 }
             }
         }
@@ -156,6 +174,14 @@ impl<'a> CommandPort<'a> {
             Ok(63) => Ok(Some(packet)),
             Err(UsbError::WouldBlock) => Ok(None),
             Ok(_) => Err(UsbError::ParseError),
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn write(&mut self, packet: &[u8; 63]) -> Result<(), UsbError> {
+        match self.class.write_packet(packet) {
+            Ok(63) => Ok(()),
+            Ok(_) => Err(UsbError::WouldBlock),
             Err(err) => Err(err),
         }
     }

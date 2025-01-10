@@ -8,7 +8,7 @@ use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::String;
 use panic_halt as _;
 use usb_device::bus::UsbBusAllocator;
-use ἐννεάς_protocol::Command;
+use ἐννεάς_protocol::{Command, Response};
 
 use fugit::RateExtU32;
 use waveshare_rp2040_epaper_73::{
@@ -141,12 +141,22 @@ fn main() -> ! {
     led_power.set_high().unwrap();
 
     loop {
-        let Some(command) = usb.poll(&mut timer, &mut led_activity).unwrap() else { continue };
+        let Some(command) = usb.poll(&mut timer, &mut led_activity).unwrap() else {
+            continue;
+        };
 
         match command {
-            Command::Start { .. } => display.clear(),
-            Command::Chunk(chunk) => display.update(chunk),
-            Command::End { .. } => display.show(&mut timer, &mut led_activity).unwrap(),
+            Ok(command) => {
+                match command {
+                    Command::Start { .. } => display.clear(),
+                    Command::Chunk(chunk) => display.update(chunk),
+                    Command::End { .. } => display.show(&mut timer, &mut led_activity).unwrap(),
+                }
+                usb.send_response(Response::Ok { _unused: [0; 62] });
+            }
+            Err(msg) => {
+                usb.send_response(Response::Err { msg });
+            }
         }
     }
 }
