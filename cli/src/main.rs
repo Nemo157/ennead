@@ -9,6 +9,7 @@ use std::{
 use anyhow::Context;
 use dither::Dither as _;
 use image::{imageops::FilterType, ImageReader};
+use indicatif::{ProgressBar, ProgressStyle};
 use zerocopy::{IntoBytes, TryFromBytes};
 use ἐννεάς_protocol::{image::PALETTE, Command, Response, HEIGHT, WIDTH};
 
@@ -50,7 +51,7 @@ fn send(device: BorrowedFd, command: &Command) -> anyhow::Result<()> {
 }
 
 fn receive(device: RawFd) -> nix::Result<anyhow::Result<Response>> {
-    let mut bytes = [0; 64];
+    let mut bytes = [0; 63];
     let mut offset = 0;
     while offset < bytes.len() {
         offset += nix::unistd::read(device.as_raw_fd(), &mut bytes[offset..])?;
@@ -112,27 +113,33 @@ fn main() -> anyhow::Result<()> {
     };
     let commands = Command::from_image(&image);
 
-    eprintln!("sending image with {} chunks", commands.len());
-
     let mut errors = 0;
-    for command in commands {
+    let bar = ProgressBar::new(u64::try_from(commands.len()).unwrap()).with_style(
+        ProgressStyle::with_template(
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
+        )
+        .unwrap(),
+    );
+    bar.set_message("sending image");
+    for command in &commands {
         loop {
-            send(device.as_fd(), &command)?;
+            send(device.as_fd(), command)?;
             match receive(device.as_raw_fd())? {
                 Ok(Response::Ok { .. }) => break,
-                Ok(Response::Err { msg }) => {
-                    eprintln!("error response {}", msg.to_str().unwrap());
+                Ok(Response::Err { msg: _ }) => {
                     errors += 1;
+                    bar.set_message(format!("sending image, {errors} errors"));
                 }
                 Err(err) => {
                     eprintln!("invalid response {err}");
                     errors += 1;
+                    bar.set_message(format!("sending image, {errors} errors"));
                 }
             }
         }
+        bar.inc(1);
     }
-
-    eprintln!("completed sending image with {errors} errors");
+    bar.finish_with_message(format!("completed sending image with {errors} errors"));
 
     Ok(())
 }

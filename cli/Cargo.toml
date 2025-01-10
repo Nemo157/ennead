@@ -22,6 +22,8 @@ image.version = "0.25.5"
 image.default-features = false
 image.features = ["png", "jpeg"]
 
+indicatif.version = "0.17.9"
+
 nix.version = "0.29.0"
 nix.default-features = false
 
