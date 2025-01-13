@@ -126,6 +126,13 @@ impl Dither {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Scale {
+    Fit,
+    Fill,
+    Stretch,
+}
+
 #[derive(Parser)]
 struct Args {
     /// Image to send to the display
@@ -134,6 +141,10 @@ struct Args {
     /// Dither algorithm to apply to image
     #[arg(long, value_enum)]
     dither: Dither,
+
+    /// Scaling to apply to fit image to frame
+    #[arg(long, value_enum)]
+    scale: Scale,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -173,23 +184,31 @@ fn main() -> anyhow::Result<()> {
         .decode()?;
     image.save("/tmp/ἐννεάς.original.png").unwrap();
 
-    let image = image
-        .resize(WIDTH, HEIGHT, FilterType::CatmullRom)
-        .to_rgb8();
+    let image = match args.scale {
+        Scale::Fit => image.resize(WIDTH, HEIGHT, FilterType::CatmullRom),
+        Scale::Fill => image.resize_to_fill(WIDTH, HEIGHT, FilterType::CatmullRom),
+        Scale::Stretch => image.resize_exact(WIDTH, HEIGHT, FilterType::CatmullRom),
+    }
+    .to_rgb8();
     image.save("/tmp/ἐννεάς.resized.png").unwrap();
 
     let image = args.dither.apply(image);
     image.save("/tmp/ἐννεάς.dithered.png").unwrap();
 
-    let mut base = image::RgbImage::from_pixel(WIDTH, HEIGHT, image::Rgb([255, 255, 255]));
-    image::imageops::overlay(
-        &mut base,
-        &image,
-        i64::from((WIDTH - image.width()) / 2),
-        i64::from((HEIGHT - image.height()) / 2),
-    );
-    let image = base;
-    image.save("/tmp/ἐννεάς.padded.png").unwrap();
+    let image = match args.scale {
+        Scale::Fit => {
+            let mut base = image::RgbImage::from_pixel(WIDTH, HEIGHT, image::Rgb([255, 255, 255]));
+            image::imageops::overlay(
+                &mut base,
+                &image,
+                i64::from((WIDTH - image.width()) / 2),
+                i64::from((HEIGHT - image.height()) / 2),
+            );
+            base.save("/tmp/ἐννεάς.padded.png").unwrap();
+            base
+        }
+        Scale::Fill | Scale::Stretch => image,
+    };
 
     let image = {
         let mut image = image;
