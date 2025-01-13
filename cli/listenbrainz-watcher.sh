@@ -90,7 +90,7 @@ change-image() {
 
   image="$new"
   echo >&2 "Displaying $image"
-  cargo run -q -- "$image"
+  cargo run -q -- "$image" burkes
 }
 
 [[ $(type -t "get-image-$source") == "function" ]] || (echo >&2 "unknown album art source '$source'" && exit 1)
