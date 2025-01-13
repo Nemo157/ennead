@@ -1,6 +1,7 @@
 extern crate ennead_protocol as ἐννεάς_protocol;
 
 use anyhow::Context;
+use clap::{Parser, ValueEnum};
 use dither::Dither as _;
 use image::{ImageReader, imageops::FilterType};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -98,41 +99,45 @@ fn blue_noise(mut image: image::RgbImage) -> image::RgbImage {
     image
 }
 
-static DITHERERS: &[(&str, fn(image::RgbImage) -> image::RgbImage)] = &[
-    ("atkinson", |image| {
-        dither_dither(image, dither::ditherer::ATKINSON)
-    }),
-    ("burkes", |image| {
-        dither_dither(image, dither::ditherer::BURKES)
-    }),
-    ("floyd-steinberg", |image| {
-        dither_dither(image, dither::ditherer::FLOYD_STEINBERG)
-    }),
-    ("jarvis-judice-ninke", |image| {
-        dither_dither(image, dither::ditherer::JARVIS_JUDICE_NINKE)
-    }),
-    ("sierra3", |image| {
-        dither_dither(image, dither::ditherer::SIERRA_3)
-    }),
-    ("stucki", |image| {
-        dither_dither(image, dither::ditherer::STUCKI)
-    }),
-    ("bayer", bayer),
-    ("blue-noise", blue_noise),
-];
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Dither {
+    Atkinson,
+    Burkes,
+    FloydSteinberg,
+    JarvisJudiceNinke,
+    Sierra3,
+    Stucki,
+    Bayer,
+    BlueNoise,
+}
+
+impl Dither {
+    fn apply(self, image: image::RgbImage) -> image::RgbImage {
+        match self {
+            Self::Atkinson => dither_dither(image, dither::ditherer::ATKINSON),
+            Self::Burkes => dither_dither(image, dither::ditherer::BURKES),
+            Self::FloydSteinberg => dither_dither(image, dither::ditherer::FLOYD_STEINBERG),
+            Self::JarvisJudiceNinke => dither_dither(image, dither::ditherer::JARVIS_JUDICE_NINKE),
+            Self::Sierra3 => dither_dither(image, dither::ditherer::SIERRA_3),
+            Self::Stucki => dither_dither(image, dither::ditherer::STUCKI),
+            Self::Bayer => bayer(image),
+            Self::BlueNoise => blue_noise(image),
+        }
+    }
+}
+
+#[derive(Parser)]
+struct Args {
+    /// Image to send to the display
+    image: String,
+
+    /// Dither algorithm to apply to image
+    #[arg(long, value_enum)]
+    dither: Dither,
+}
 
 fn main() -> anyhow::Result<()> {
-    let mut args = std::env::args().skip(1);
-
-    let image = args.next().context("missing image filename")?;
-
-    let dither = args.next().context("missing dither algorithm")?;
-
-    let ditherer = DITHERERS
-        .iter()
-        .find(|(name, _)| **name == dither)
-        .context("unknown dither algorithm")?
-        .1;
+    let args = Args::parse();
 
     let spinner = ProgressStyle::with_template("{prefix:>40.cyan} {spinner} {msg}")?;
     let success = ProgressStyle::with_template("{prefix:>40.green} {spinner} {msg}")?;
@@ -161,9 +166,11 @@ fn main() -> anyhow::Result<()> {
     let bar = ProgressBar::no_length()
         .with_style(spinner.clone())
         .with_prefix("loading image")
-        .with_message(image.clone());
+        .with_message(args.image.clone());
 
-    let image = ImageReader::open(&image)?.with_guessed_format()?.decode()?;
+    let image = ImageReader::open(&args.image)?
+        .with_guessed_format()?
+        .decode()?;
     image.save("/tmp/ἐννεάς.original.png").unwrap();
 
     let image = image
@@ -171,7 +178,7 @@ fn main() -> anyhow::Result<()> {
         .to_rgb8();
     image.save("/tmp/ἐννεάς.resized.png").unwrap();
 
-    let image = ditherer(image);
+    let image = args.dither.apply(image);
     image.save("/tmp/ἐννεάς.dithered.png").unwrap();
 
     let mut base = image::RgbImage::from_pixel(WIDTH, HEIGHT, image::Rgb([255, 255, 255]));

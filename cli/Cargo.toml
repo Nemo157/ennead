@@ -9,6 +9,9 @@ anyhow.version = "1.0.93"
 anyhow.default-features = false
 anyhow.features = ["std"]
 
+clap.version = "4.5.26"
+clap.features = ["derive"]
+
 dither.git = "https://github.com/Nemo157/dither"
 dither.default-features = false
 
