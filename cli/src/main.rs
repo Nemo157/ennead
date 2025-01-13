@@ -25,13 +25,13 @@ fn find_device() -> anyhow::Result<(DeviceInfo, u8)> {
 }
 
 fn dither_dither(
-    image: image::RgbaImage,
+    image: image::RgbImage,
     ditherer: dither::ditherer::Ditherer<'static>,
 ) -> image::RgbImage {
     let img = dither::Img::new(
         image
             .pixels()
-            .map(|&image::Rgba([r, g, b, _])| dither::color::RGB(r as f64, g as f64, b as f64)),
+            .map(|&image::Rgb([r, g, b])| dither::color::RGB(r as f64, g as f64, b as f64)),
         image.width(),
     )
     .unwrap();
@@ -50,7 +50,7 @@ fn dither_dither(
     .unwrap()
 }
 
-fn bayer(image: image::RgbaImage) -> image::RgbImage {
+fn bayer(image: image::RgbImage) -> image::RgbImage {
     use image_effects::effect::Effect;
 
     let palette = PALETTE
@@ -62,7 +62,7 @@ fn bayer(image: image::RgbaImage) -> image::RgbImage {
 
     let img = image
         .rows()
-        .map(|row| row.map(|&image::Rgba([r, g, b, _])| [r, g, b]).collect())
+        .map(|row| row.map(|&image::Rgb([r, g, b])| [r, g, b]).collect())
         .collect();
 
     let img: Vec<Vec<[u8; 3]>> = image_effects::dither::bayer::Bayer::new(4, palette).affect(img);
@@ -70,7 +70,7 @@ fn bayer(image: image::RgbaImage) -> image::RgbImage {
     image::RgbImage::from_vec(WIDTH, HEIGHT, img.into_iter().flatten().flatten().collect()).unwrap()
 }
 
-static DITHERERS: &[(&str, fn(image::RgbaImage) -> image::RgbImage)] = &[
+static DITHERERS: &[(&str, fn(image::RgbImage) -> image::RgbImage)] = &[
     ("atkinson", |image| {
         dither_dither(image, dither::ditherer::ATKINSON)
     }),
@@ -138,10 +138,10 @@ fn main() -> anyhow::Result<()> {
     image.save("/tmp/ἐννεάς.original.png").unwrap();
 
     let image = image.resize(WIDTH, HEIGHT, FilterType::CatmullRom);
-    let mut base = image::RgbaImage::from_pixel(WIDTH, HEIGHT, image::Rgba([255, 255, 255, 255]));
+    let mut base = image::RgbImage::from_pixel(WIDTH, HEIGHT, image::Rgb([255, 255, 255]));
     image::imageops::overlay(
         &mut base,
-        &image,
+        &image.to_rgb8(),
         i64::from((WIDTH - image.width()) / 2),
         i64::from((HEIGHT - image.height()) / 2),
     );
