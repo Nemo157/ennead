@@ -64,7 +64,12 @@ get-image-coverartarchive() {
   if ! [[ -f "$file" ]]
   then
     local url="https://coverartarchive.org/release/$mbid/front"
-    curl -L -o "$file" "$url" || return 1
+    echo >&2 "downloading cover art"
+    if ! curl -sfLo "$file" "$url"
+    then
+      echo >&2 "download failed"
+      return 1
+    fi
   fi
 
   echo "$file"
@@ -74,7 +79,7 @@ log() {
   local artist="$(query .artist)"
   local album="$(query .release)"
 
-  echo "Listening to $artist - $album"
+  echo >&2 "Listening to $artist - $album"
 }
 
 image=
@@ -84,11 +89,11 @@ change-image() {
   [ -n "$new" ] && [ "$image" != "$new" ] || return 1
 
   image="$new"
-  echo "Displaying $image"
+  echo >&2 "Displaying $image"
   cargo run -q -- "$image"
 }
 
-[[ $(type -t "get-image-$source") == "function" ]] || (echo "unknown album art source '$source'" && exit 1)
+[[ $(type -t "get-image-$source") == "function" ]] || (echo >&2 "unknown album art source '$source'" && exit 1)
 
 while true
 do
@@ -104,21 +109,21 @@ do
 
   for (( i = wait; i > 0; i-- ))
   do
-    printf '·'
+    printf >&2 '·'
   done
 
   for (( i = wait; i > 0; i-- ))
   do
     if read -st 1
     then
-      printf '\r'
+      printf >&2 '\r'
       for (( ; i > 0; i-- ))
       do
-        printf ' '
+        printf >&2 ' '
       done
-      printf '\r'
+      printf >&2 '\r'
       break
     fi
-    printf '\b \b'
+    printf >&2 '\b \b'
   done
 done
