@@ -18,7 +18,7 @@ get-info() {
 
 info=
 update-info() {
-  if new="$(get-info)" && [ "$info" != "$new" ]
+  if local new="$(get-info)" && [ "$info" != "$new" ]
   then
     info="$new"
     return 0
@@ -31,13 +31,19 @@ query() {
   jq -rMc "$1" <<<"$info"
 }
 
-log() {
-  echo "Listening to $(query .artist) - $(query .release)"
-}
-
 image=
 change-image() {
-  new="$(beet list -a -f '$artpath' "albumartists:$(query .artist)" "album:$(query .release)")"
+  local artist="$(query .artist)"
+  local album="$(query .release)"
+
+  if [ -z "$artist" ] || [ -z "$album" ]
+  then
+    return 1
+  fi
+
+  echo "Listening to $artist - $album"
+
+  local new="$(beet list -a -f '$artpath' "albumartists::^$artist\$" "album::^$album\$")"
   if [ -z "$new" ]
   then
     echo "Could not find album art"
@@ -47,6 +53,7 @@ change-image() {
   if [ "$image" != "$new" ]
   then
     image="$new"
+    echo "Displaying $image"
     cargo run -q -- "$image"
     return 0
   fi
@@ -59,7 +66,6 @@ do
   wait=30
   if update-info
   then
-    log
     if change-image
     then
       wait=60
