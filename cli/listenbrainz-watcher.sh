@@ -3,6 +3,7 @@
 set -euo pipefail
 
 user="${1:?missing listenbrainz username}"
+source="${2:?missing album art source}"
 
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ἐννεάς-listenbrainz-watcher"
 mkdir -p "$cache_dir"
@@ -30,55 +31,71 @@ get-info() {
 
 info="$(load-cached-info)"
 update-info() {
-  if local new="$(get-info)" && [ "$info" != "$new" ]
-  then
-    info="$new"
-    save-cached-info
-    return 0
-  else
-    return 1
-  fi
+  local new="$(get-info)"
+  [ "$info" != "$new" ] || return 1
+  info="$new"
+  save-cached-info
 }
 
 query() {
   jq -rMc "$1" <<<"$info"
 }
 
-image=
-change-image() {
+get-image-beets() {
   local artist="$(query .artist)"
   local album="$(query .release)"
 
-  if [ -z "$artist" ] || [ -z "$album" ]
+  [ -n "$artist" ] || return 1
+  [ -n "$album" ] || return 1
+
+  local image="$(beet list -a -f '$artpath' "albumartists::^$artist\$" "album::^$album\$")"
+
+  [ -n "$image" ] || return 1
+
+  echo "$image"
+}
+
+get-image-coverartarchive() {
+  local mbid="$(query .mbid)"
+  local file="$cache_dir/$mbid.cover.jpg" # probably jpg, but maybe not, doesn't really matter
+
+  [ -n "$mbid" ] || return 1
+
+  if ! [[ -f "$file" ]]
   then
-    return 1
+    local url="https://coverartarchive.org/release/$mbid/front"
+    curl -L -o "$file" "$url" || return 1
   fi
+
+  echo "$file"
+}
+
+log() {
+  local artist="$(query .artist)"
+  local album="$(query .release)"
 
   echo "Listening to $artist - $album"
-
-  local new="$(beet list -a -f '$artpath' "albumartists::^$artist\$" "album::^$album\$")"
-  if [ -z "$new" ]
-  then
-    echo "Could not find album art"
-    return 1
-  fi
-
-  if [ "$image" != "$new" ]
-  then
-    image="$new"
-    echo "Displaying $image"
-    cargo run -q -- "$image"
-    return 0
-  fi
-
-  return 1
 }
+
+image=
+change-image() {
+  local new="$("get-image-$source")"
+
+  [ -n "$new" ] && [ "$image" != "$new" ] || return 1
+
+  image="$new"
+  echo "Displaying $image"
+  cargo run -q -- "$image"
+}
+
+[[ $(type -t "get-image-$source") == "function" ]] || (echo "unknown album art source '$source'" && exit 1)
 
 while true
 do
   wait=30
   if update-info
   then
+    log
     if change-image
     then
       wait=60
