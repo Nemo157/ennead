@@ -70,6 +70,30 @@ fn bayer(image: image::RgbImage) -> image::RgbImage {
     image::RgbImage::from_vec(WIDTH, HEIGHT, img.into_iter().flatten().flatten().collect()).unwrap()
 }
 
+fn blue_noise(mut image: image::RgbImage) -> image::RgbImage {
+    fn dist(x: &image::Rgb<u8>, y: &image::Rgb<u8>) -> u32 {
+        (x.0[0].abs_diff(y.0[0]) as u32).pow(2)
+            + (x.0[1].abs_diff(y.0[1]) as u32).pow(2)
+            + (x.0[2].abs_diff(y.0[2]) as u32).pow(2)
+    }
+
+    static NOISE: &[u8] = include_bytes!("./blue-noise.png");
+    let noise = ImageReader::with_format(std::io::Cursor::new(NOISE), image::ImageFormat::Png)
+        .decode()
+        .unwrap()
+        .to_rgb8();
+
+    for (pixel, noise) in image.pixels_mut().zip(noise.pixels()) {
+        let dith = image::Rgb(std::array::from_fn(|c| {
+            let offset = pixel[c] as i16 - noise[c] as i16 + 128 as i16;
+            offset.clamp(0, 255) as u8
+        }));
+        *pixel = *PALETTE.iter().min_by_key(|p| dist(&dith, p)).unwrap();
+    }
+
+    image
+}
+
 static DITHERERS: &[(&str, fn(image::RgbImage) -> image::RgbImage)] = &[
     ("atkinson", |image| {
         dither_dither(image, dither::ditherer::ATKINSON)
@@ -90,6 +114,7 @@ static DITHERERS: &[(&str, fn(image::RgbImage) -> image::RgbImage)] = &[
         dither_dither(image, dither::ditherer::STUCKI)
     }),
     ("bayer", bayer),
+    ("blue-noise", blue_noise),
 ];
 
 fn main() -> anyhow::Result<()> {
