@@ -4,6 +4,19 @@ set -euo pipefail
 
 user="${1:?missing listenbrainz username}"
 
+cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ἐννεάς-listenbrainz-watcher"
+mkdir -p "$cache_dir"
+
+load-cached-info() {
+  local file="$cache_dir/$user.playing-now.json"
+  [[ -f "$file" ]] && cat "$file" || true
+}
+
+save-cached-info() {
+  local file="$cache_dir/$user.playing-now.json"
+  echo "$info" >"$file"
+}
+
 get-info() {
   curl -s "https://api.listenbrainz.org/1/user/$user/playing-now" | jq -Mc '
     .payload.listens[].track_metadata
@@ -15,12 +28,12 @@ get-info() {
   '
 }
 
-
-info=
+info="$(load-cached-info)"
 update-info() {
   if local new="$(get-info)" && [ "$info" != "$new" ]
   then
     info="$new"
+    save-cached-info
     return 0
   else
     return 1
