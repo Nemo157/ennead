@@ -26,12 +26,16 @@ image.version = "0.25.5"
 image.default-features = false
 image.features = ["png", "jpeg"]
 
+image-effects.version = "0.1.0"
+
 indicatif.version = "0.17.9"
 
 nix.version = "0.29.0"
 nix.default-features = false
 
 nusb.version = "0.1.12"
+
+palette.version = "0.7.6"
 
 udev.version = "0.9.1"
 udev.default-features = false

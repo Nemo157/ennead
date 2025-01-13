@@ -50,6 +50,26 @@ fn dither_dither(
     .unwrap()
 }
 
+fn bayer(image: image::RgbaImage) -> image::RgbImage {
+    use image_effects::effect::Effect;
+
+    let palette = PALETTE
+        .iter()
+        .map(|&image::Rgb([r, g, b])| {
+            palette::rgb::Srgb::new(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0)
+        })
+        .collect();
+
+    let img = image
+        .rows()
+        .map(|row| row.map(|&image::Rgba([r, g, b, _])| [r, g, b]).collect())
+        .collect();
+
+    let img: Vec<Vec<[u8; 3]>> = image_effects::dither::bayer::Bayer::new(4, palette).affect(img);
+
+    image::RgbImage::from_vec(WIDTH, HEIGHT, img.into_iter().flatten().flatten().collect()).unwrap()
+}
+
 static DITHERERS: &[(&str, fn(image::RgbaImage) -> image::RgbImage)] = &[
     ("atkinson", |image| {
         dither_dither(image, dither::ditherer::ATKINSON)
@@ -69,6 +89,7 @@ static DITHERERS: &[(&str, fn(image::RgbaImage) -> image::RgbImage)] = &[
     ("stucki", |image| {
         dither_dither(image, dither::ditherer::STUCKI)
     }),
+    ("bayer", bayer),
 ];
 
 fn main() -> anyhow::Result<()> {
