@@ -83,7 +83,11 @@ fn blue_noise(mut image: image::RgbImage) -> image::RgbImage {
         .unwrap()
         .to_rgb8();
 
-    for (pixel, noise) in image.pixels_mut().zip(noise.pixels()) {
+    for (pixel, noise) in image
+        .rows_mut()
+        .zip(noise.rows())
+        .flat_map(|(row, noise)| row.zip(noise))
+    {
         let dith = image::Rgb(std::array::from_fn(|c| {
             let offset = pixel[c] as i16 - noise[c] as i16 + 128 as i16;
             offset.clamp(0, 255) as u8
@@ -162,19 +166,23 @@ fn main() -> anyhow::Result<()> {
     let image = ImageReader::open(&image)?.with_guessed_format()?.decode()?;
     image.save("/tmp/ἐννεάς.original.png").unwrap();
 
-    let image = image.resize(WIDTH, HEIGHT, FilterType::CatmullRom);
-    let mut base = image::RgbImage::from_pixel(WIDTH, HEIGHT, image::Rgb([255, 255, 255]));
-    image::imageops::overlay(
-        &mut base,
-        &image.to_rgb8(),
-        i64::from((WIDTH - image.width()) / 2),
-        i64::from((HEIGHT - image.height()) / 2),
-    );
-    let image = base;
+    let image = image
+        .resize(WIDTH, HEIGHT, FilterType::CatmullRom)
+        .to_rgb8();
     image.save("/tmp/ἐννεάς.resized.png").unwrap();
 
     let image = ditherer(image);
     image.save("/tmp/ἐννεάς.dithered.png").unwrap();
+
+    let mut base = image::RgbImage::from_pixel(WIDTH, HEIGHT, image::Rgb([255, 255, 255]));
+    image::imageops::overlay(
+        &mut base,
+        &image,
+        i64::from((WIDTH - image.width()) / 2),
+        i64::from((HEIGHT - image.height()) / 2),
+    );
+    let image = base;
+    image.save("/tmp/ἐννεάς.padded.png").unwrap();
 
     let image = {
         let mut image = image;
