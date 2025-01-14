@@ -18,8 +18,12 @@ save-cached-info() {
   echo "$info" >"$file"
 }
 
+kurl() {
+  curl -s -H 'User-Agent: ἐννεάς (https://github.com/Nemo157/ennead)' "$@"
+}
+
 get-info() {
-  curl -s "https://api.listenbrainz.org/1/user/$user/playing-now" | jq -Mc '
+  kurl "https://api.listenbrainz.org/1/user/$user/playing-now" | jq -Mc '
     .payload.listens[].track_metadata
     | {
       artist: .artist_name,
@@ -59,18 +63,18 @@ download-release-art() {
   local mbid="$1"
   local file="$2"
 
-  curl -sfLo "$file" "https://coverartarchive.org/release/$mbid/front"
+  kurl -fLo "$file" "https://coverartarchive.org/release/$mbid/front"
 }
 
 download-release-group-art() {
   local mbid="$1"
   local file="$2"
 
-  local groupmbid="$(curl -s "https://musicbrainz.org/ws/2/release/$mbid?inc=release-groups&fmt=json" | jq -r '.["release-group"].id')"
+  local groupmbid="$(kurl "https://musicbrainz.org/ws/2/release/$mbid?inc=release-groups&fmt=json" | jq -r '.["release-group"].id')"
 
   [ -n "$groupmbid" ] || return 1
 
-  curl -sfLo "$file" "https://coverartarchive.org/release-group/$groupmbid/front"
+  kurl -fLo "$file" "https://coverartarchive.org/release-group/$groupmbid/front"
 }
 
 get-image-coverartarchive() {
