@@ -55,6 +55,24 @@ get-image-beets() {
   echo "$image"
 }
 
+download-release-art() {
+  local mbid="$1"
+  local file="$2"
+
+  curl -sfLo "$file" "https://coverartarchive.org/release/$mbid/front"
+}
+
+download-release-group-art() {
+  local mbid="$1"
+  local file="$2"
+
+  local groupmbid="$(curl -s "https://musicbrainz.org/ws/2/release/$mbid?inc=release-groups&fmt=json" | jq -r '.["release-group"].id')"
+
+  [ -n "$groupmbid" ] || return 1
+
+  curl -sfLo "$file" "https://coverartarchive.org/release-group/$groupmbid/front"
+}
+
 get-image-coverartarchive() {
   local mbid="$(query .mbid)"
   local file="$cache_dir/$mbid.cover.jpg" # probably jpg, but maybe not, doesn't really matter
@@ -63,9 +81,8 @@ get-image-coverartarchive() {
 
   if ! [[ -f "$file" ]]
   then
-    local url="https://coverartarchive.org/release/$mbid/front"
     echo >&2 "downloading cover art"
-    if ! curl -sfLo "$file" "$url"
+    if ! (download-release-art "$mbid" "$file" || download-release-group-art "$mbid" "$file")
     then
       echo >&2 "download failed"
       return 1
