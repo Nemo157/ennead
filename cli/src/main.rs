@@ -42,8 +42,8 @@ fn dither_dither(
     let img = ditherer.dither(img, dither::color::palette::quantize(&palette));
 
     image::RgbImage::from_vec(
-        WIDTH,
-        HEIGHT,
+        image.width(),
+        image.height(),
         img.iter()
             .flat_map(|&dither::color::RGB(r, g, b)| [r as u8, g as u8, b as u8])
             .collect(),
@@ -68,7 +68,12 @@ fn bayer(image: image::RgbImage) -> image::RgbImage {
 
     let img: Vec<Vec<[u8; 3]>> = image_effects::dither::bayer::Bayer::new(4, palette).affect(img);
 
-    image::RgbImage::from_vec(WIDTH, HEIGHT, img.into_iter().flatten().flatten().collect()).unwrap()
+    image::RgbImage::from_vec(
+        image.width(),
+        image.height(),
+        img.into_iter().flatten().flatten().collect(),
+    )
+    .unwrap()
 }
 
 fn blue_noise(mut image: image::RgbImage) -> image::RgbImage {
