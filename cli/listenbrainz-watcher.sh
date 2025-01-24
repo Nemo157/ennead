@@ -22,22 +22,15 @@ kurl() {
   curl -s -H 'User-Agent: ἐννεάς (https://github.com/Nemo157/ennead)' "$@"
 }
 
-get-info() {
-  kurl "https://api.listenbrainz.org/1/user/$user/playing-now" | jq -Mc '
-    .payload.listens[].track_metadata
-    | {
-      artist: .artist_name,
-      release: .release_name,
-      mbid: .additional_info.release_mbid,
-    }
-  '
+get-playing-now() {
+  kurl "https://api.listenbrainz.org/1/user/$user/playing-now" | jq -rMc '.payload.listens[].track_metadata.additional_info.release_mbid'
 }
 
 info="$(load-cached-info)"
 update-info() {
-  local new="$(get-info)"
-  [ "$info" != "$new" ] || return 1
-  info="$new"
+  local newmbid="$(get-playing-now)"
+  [ "$(query .id)" != "$newmbid" ] || return 1
+  info="$(kurl "https://musicbrainz.org/ws/2/release/$newmbid?inc=release-groups+artists&fmt=json")"
   save-cached-info
 }
 
@@ -46,8 +39,8 @@ query() {
 }
 
 get-image-beets() {
-  local artist="$(query .artist)"
-  local album="$(query .release)"
+  local artist="$(query '.["artist-credit"] | map(.name + .joinphrase) | join("")')"
+  local album="$(query .title)"
 
   [ -n "$artist" ] || return 1
   [ -n "$album" ] || return 1
@@ -60,17 +53,19 @@ get-image-beets() {
 }
 
 download-release-art() {
-  local mbid="$1"
-  local file="$2"
+  local file="$1"
+
+  local mbid="$(query .id)"
+
+  [ -n "$mbid" ] || return 1
 
   kurl -fLo "$file" "https://coverartarchive.org/release/$mbid/front"
 }
 
 download-release-group-art() {
-  local mbid="$1"
-  local file="$2"
+  local file="$1"
 
-  local groupmbid="$(kurl "https://musicbrainz.org/ws/2/release/$mbid?inc=release-groups&fmt=json" | jq -r '.["release-group"].id')"
+  local groupmbid="$(query '.["release-group"].id')"
 
   [ -n "$groupmbid" ] || return 1
 
@@ -78,7 +73,7 @@ download-release-group-art() {
 }
 
 get-image-coverartarchive() {
-  local mbid="$(query .mbid)"
+  local mbid="$(query .id)"
   local file="$cache_dir/$mbid.cover.image" # unknown image type, use arbitrary suffix
 
   [ -n "$mbid" ] || return 1
@@ -86,7 +81,7 @@ get-image-coverartarchive() {
   if ! [[ -f "$file" ]]
   then
     echo >&2 "downloading cover art"
-    if ! (download-release-art "$mbid" "$file" || download-release-group-art "$mbid" "$file")
+    if ! (download-release-art "$file" || download-release-group-art "$file")
     then
       echo >&2 "download failed"
       return 1
@@ -97,8 +92,8 @@ get-image-coverartarchive() {
 }
 
 log() {
-  local artist="$(query .artist)"
-  local album="$(query .release)"
+  local artist="$(query '.["artist-credit"] | map(.name + .joinphrase) | join("")')"
+  local album="$(query .title)"
 
   echo >&2 "Listening to $artist - $album"
 }
