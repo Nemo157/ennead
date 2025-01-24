@@ -79,7 +79,7 @@ download-release-group-art() {
 
 get-image-coverartarchive() {
   local mbid="$(query .mbid)"
-  local file="$cache_dir/$mbid.cover.jpg" # probably jpg, but maybe not, doesn't really matter
+  local file="$cache_dir/$mbid.cover.image" # unknown image type, use arbitrary suffix
 
   [ -n "$mbid" ] || return 1
 
