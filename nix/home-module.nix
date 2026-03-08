@@ -25,19 +25,28 @@ in {
       default = self.packages.${pkgs.system}."ἐννεάς-cli";
       description = "The ἐννεάς-cli package to use.";
     };
+
+    deviceActivation = lib.mkEnableOption "USB device activation (requires NixOS module)";
   };
 
   config = lib.mkIf cfg.enable {
-    systemd.user.services."ἐννεάς-listenbrainz-watcher" = {
-      Unit.Description = "ἐννεάς ListenBrainz watcher";
+    systemd.user.services."ennead-listenbrainz-watcher" = lib.mkMerge [
+      {
+        Unit.Description = "ἐννεάς ListenBrainz watcher";
 
-      Service = {
-        ExecStart = "${lib.getExe wrappedScript} ${cfg.username} coverartarchive";
-        Restart = "on-failure";
-        RestartSec = 30;
-      };
-
-      Install.WantedBy = [ "default.target" ];
-    };
+        Service = {
+          ExecStart = "${lib.getExe wrappedScript} ${cfg.username} coverartarchive";
+          Restart = "on-failure";
+          RestartSec = 30;
+        };
+      }
+      (lib.mkIf cfg.deviceActivation {
+        Unit.BindsTo = [ "dev-ennead.device" ];
+        Unit.After = [ "dev-ennead.device" ];
+      })
+      (lib.mkIf (!cfg.deviceActivation) {
+        Install.WantedBy = [ "default.target" ];
+      })
+    ];
   };
 }
