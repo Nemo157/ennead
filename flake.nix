@@ -43,9 +43,12 @@
           pkg-config
           rust-toolchain
         ];
+
         buildInputs = [
           udev
         ];
+
+        ENNEAD_DEV = 1;
       };
     }
   );
