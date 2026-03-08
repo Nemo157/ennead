@@ -119,6 +119,9 @@ change-image() {
 
 [[ $(type -t "get-image-$source") == "function" ]] || (echo >&2 "unknown album art source '$source'" && exit 1)
 
+interactive=false
+[[ -t 2 ]] && interactive=true
+
 while true
 do
   wait=30
@@ -131,23 +134,28 @@ do
     fi
   fi
 
-  for (( i = wait; i > 0; i-- ))
-  do
-    printf >&2 '·'
-  done
+  if $interactive
+  then
+    for (( i = wait; i > 0; i-- ))
+    do
+      printf >&2 '·'
+    done
 
-  for (( i = wait; i > 0; i-- ))
-  do
-    if read -st 1
-    then
-      printf >&2 '\r'
-      for (( ; i > 0; i-- ))
-      do
-        printf >&2 ' '
-      done
-      printf >&2 '\r'
-      break
-    fi
-    printf >&2 '\b \b'
-  done
+    for (( i = wait; i > 0; i-- ))
+    do
+      if read -st 1
+      then
+        printf >&2 '\r'
+        for (( ; i > 0; i-- ))
+        do
+          printf >&2 ' '
+        done
+        printf >&2 '\r'
+        break
+      fi
+      printf >&2 '\b \b'
+    done
+  else
+    sleep "$wait"
+  fi
 done

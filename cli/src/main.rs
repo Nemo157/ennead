@@ -1,5 +1,7 @@
 extern crate ennead_protocol as ἐννεάς_protocol;
 
+use std::io::IsTerminal;
+
 use anyhow::Context;
 use clap::{Parser, ValueEnum};
 use dither::Dither as _;
@@ -154,6 +156,7 @@ struct Args {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    let interactive = std::io::stderr().is_terminal();
 
     let spinner = ProgressStyle::with_template("{prefix:>40.cyan} {spinner} {msg}")?;
     let success = ProgressStyle::with_template("{prefix:>40.green} {spinner} {msg}")?;
@@ -161,28 +164,38 @@ fn main() -> anyhow::Result<()> {
         "{prefix:>40.cyan} {spinner} [{bar:27}] {pos:>9}/{len:9}  {per_sec} {elapsed:>4}/{eta:4}",
     )?;
 
-    let bar = ProgressBar::no_length()
-        .with_style(spinner.clone())
-        .with_prefix("finding ἐννεάς device");
+    let bar = if interactive {
+        ProgressBar::no_length().with_style(spinner.clone())
+    } else {
+        ProgressBar::hidden()
+    }
+    .with_prefix("finding ἐννεάς device");
     let (device, interface_number) = find_device()?;
     let interface = device
         .open()
         .context("opening usb device")?
         .detach_and_claim_interface(interface_number)
         .context("claiming usb interface")?;
+    let device_msg = format!(
+        "{}/{} {}",
+        device.manufacturer_string().unwrap_or("<unknown>"),
+        device.product_string().unwrap_or("<unknown>"),
+        device.serial_number().unwrap_or("<unknown>")
+    );
     bar.with_style(success.clone())
         .with_prefix("found device")
-        .finish_with_message(format!(
-            "{}/{} {}",
-            device.manufacturer_string().unwrap_or("<unknown>"),
-            device.product_string().unwrap_or("<unknown>"),
-            device.serial_number().unwrap_or("<unknown>")
-        ));
+        .finish_with_message(device_msg.clone());
+    if !interactive {
+        eprintln!("{:>40}   {}", "found device", device_msg);
+    }
 
-    let bar = ProgressBar::no_length()
-        .with_style(spinner.clone())
-        .with_prefix("loading image")
-        .with_message(args.image.clone());
+    let bar = if interactive {
+        ProgressBar::no_length().with_style(spinner.clone())
+    } else {
+        ProgressBar::hidden()
+    }
+    .with_prefix("loading image")
+    .with_message(args.image.clone());
 
     let image = ImageReader::open(&args.image)?
         .with_guessed_format()?
@@ -225,10 +238,16 @@ fn main() -> anyhow::Result<()> {
     bar.with_style(success.clone())
         .with_prefix("loaded image")
         .finish();
+    if !interactive {
+        eprintln!("{:>40}", "loaded image");
+    }
 
-    let bar = ProgressBar::new(u64::try_from(commands.len())?)
-        .with_style(bar_style.clone())
-        .with_prefix("sending commands");
+    let bar = if interactive {
+        ProgressBar::new(u64::try_from(commands.len())?).with_style(bar_style.clone())
+    } else {
+        ProgressBar::hidden()
+    }
+    .with_prefix("sending commands");
 
     let mut output = interface.bulk_out_queue(0x02);
     for command in &commands {
@@ -240,9 +259,13 @@ fn main() -> anyhow::Result<()> {
         bar.inc(1);
     }
 
+    let sent_msg = "image should be refreshing now";
     bar.with_style(success.clone())
         .with_prefix("sent commands")
-        .finish_with_message("image should be refreshing now");
+        .finish_with_message(sent_msg);
+    if !interactive {
+        eprintln!("{:>40}   {}", "sent commands", sent_msg);
+    }
 
     Ok(())
 }
