@@ -27,7 +27,7 @@ futures.features = ["executor"]
 
 image.version = "0.25.5"
 image.default-features = false
-image.features = ["png", "jpeg"]
+image.features = ["png", "jpeg", "gif"]
 
 image-effects.version = "0.1.0"
 
