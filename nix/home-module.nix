@@ -7,7 +7,8 @@ let
 
   wrappedScript = pkgs.writeShellApplication {
     name = "ἐννεάς-listenbrainz-watcher";
-    runtimeInputs = [ pkgs.curl pkgs.jq cfg.package ];
+    runtimeInputs = [ pkgs.curl pkgs.jq cfg.package ]
+      ++ lib.optional cfg.notifyMissingCoverArt pkgs.libnotify;
     text = builtins.readFile ../listenbrainz-watcher.sh;
     checkPhase = "";
   };
@@ -27,6 +28,8 @@ in {
     };
 
     deviceActivation = lib.mkEnableOption "USB device activation (requires NixOS module)";
+
+    notifyMissingCoverArt = lib.mkEnableOption "desktop notifications when cover art is not found";
   };
 
   config = lib.mkIf cfg.enable {
@@ -40,6 +43,9 @@ in {
           RestartSec = 30;
         };
       }
+      (lib.mkIf cfg.notifyMissingCoverArt {
+        Service.Environment = "NOTIFY_MISSING_ART=1";
+      })
       (lib.mkIf cfg.deviceActivation {
         Unit.BindsTo = [ "dev-ennead.device" ];
         Unit.After = [ "dev-ennead.device" ];

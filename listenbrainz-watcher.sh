@@ -106,11 +106,23 @@ log() {
   echo >&2 "Listening to $artist - $album"
 }
 
+notify-missing-art() {
+  [[ "${NOTIFY_MISSING_ART:-}" == "1" ]] || return 0
+  local artist="$(query '.["artist-credit"] | map(.name + .joinphrase) | join("")')"
+  local album="$(query .title)"
+  notify-send "ἐννεάς" "No cover art found for $artist - $album" || true
+}
+
 image=
 change-image() {
   local new="$("get-image-$source")"
 
-  [ -n "$new" ] && [ "$image" != "$new" ] || return 1
+  if [ -z "$new" ]; then
+    notify-missing-art
+    return 1
+  fi
+
+  [ "$image" != "$new" ] || return 1
 
   image="$new"
   echo >&2 "Displaying $image"
