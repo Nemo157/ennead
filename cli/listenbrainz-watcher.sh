@@ -23,13 +23,13 @@ kurl() {
 }
 
 get-playing-now() {
-  kurl "https://api.listenbrainz.org/1/user/$user/playing-now" | jq -rMc '.payload.listens[].track_metadata.additional_info.release_mbid'
+  kurl "https://api.listenbrainz.org/1/user/$user/playing-now" | jq -rMc '.payload.listens[0].track_metadata.additional_info.release_mbid // ""'
 }
 
 info="$(load-cached-info)"
 update-info() {
   local newmbid="$(get-playing-now)"
-  [ "$(query .id)" != "$newmbid" ] || return 1
+  [ -n "$newmbid" ] && [ "$(query .id)" != "$newmbid" ] || return 1
   info="$(kurl "https://musicbrainz.org/ws/2/release/$newmbid?inc=release-groups+artists&fmt=json")"
   save-cached-info
 }
