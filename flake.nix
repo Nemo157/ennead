@@ -6,9 +6,13 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, home-manager }:
   let
     systems = builtins.filter
       (system: nixpkgs.lib.strings.hasSuffix "linux" system)
@@ -35,6 +39,31 @@
         }
       );
     in {
+      packages."ἐννεάς-cli" = pkgs.callPackage ./nix/package.nix {
+        rustPlatform = pkgs.makeRustPlatform {
+          rustc = pkgs.rust-bin.selectLatestNightlyWith (t: t.minimal);
+          cargo = pkgs.rust-bin.selectLatestNightlyWith (t: t.minimal);
+        };
+      };
+
+      checks.home-module = let
+        hmConfig = home-manager.lib.homeManagerConfiguration {
+          inherit pkgs;
+          modules = [
+            self.homeManagerModules.default
+            {
+              home.username = "test";
+              home.homeDirectory = "/home/test";
+              home.stateVersion = "24.11";
+              services."ἐννεάς-listenbrainz-watcher" = {
+                enable = true;
+                username = "test";
+              };
+            }
+          ];
+        };
+      in hmConfig.activationPackage;
+
       devShells.default = with pkgs; mkShell {
         nativeBuildInputs = [
           elf2uf2-rs
@@ -51,5 +80,7 @@
         ENNEAD_DEV = 1;
       };
     }
-  );
+  ) // {
+    homeManagerModules.default = import ./nix/home-module.nix self;
+  };
 }
